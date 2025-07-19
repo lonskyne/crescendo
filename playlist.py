@@ -13,6 +13,8 @@ folder_path = "D://StreamripDownloads/Sveeee"
 
 class MainWindow(QMainWindow):
     def __init__(self):
+        self.current_song = None
+        self.paused = None
         self.player = None
 
         super().__init__()
@@ -63,14 +65,14 @@ class MainWindow(QMainWindow):
         self.ui.tableView.resizeColumnsToContents()
         self.ui.tableView.setIconSize(QSize(30, 30))
 
-
         self.ui.tableView.doubleClicked.connect(self.play_selected_song)
+        self.ui.pushButton_playpause.pressed.connect(self.playpause)
 
  
     def play_selected_song(self, index):
         row = index.row()
-        song = self.model.songs[row]
-        file_path = song["file_path"]
+        self.current_song = self.model.songs[row]
+        file_path = self.current_song["file_path"]
 
         if self.player == None:
             self.player = vlc.MediaPlayer()
@@ -81,7 +83,32 @@ class MainWindow(QMainWindow):
 
         self.player.set_media(vlc.Media(file_path))
         self.player.play()
-            
+
+        paused = False
+
+        self.ui.pushButton_playpause.setEnabled(True)
+        self.update_current_playing_ui()
+    
+    def update_current_playing_ui(self):
+        if self.current_song != None:
+            self.ui.pushButton_playpause.setEnabled(True)
+            self.ui.pushButton_previous.setEnabled(True)
+            self.ui.pushButton_next.setEnabled(True)
+
+            self.ui.label_current_playing_title.setText(self.current_song["title"])
+            self.ui.label_current_playing_artist.setText(self.current_song["artist"])
+
+            if self.paused:
+                self.ui.pushButton_playpause.setText("Play")
+            else:    
+                self.ui.pushButton_playpause.setText("Pause")
+
+    def playpause(self):
+        self.paused = not self.paused
+
+        self.player.pause()
+
+        self.update_current_playing_ui()
 
 
 class MusicTableModel(QAbstractTableModel):
