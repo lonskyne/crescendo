@@ -4,8 +4,8 @@ import re
 import vlc
 import random
 
-from PyQt5.QtWidgets import QApplication, QMainWindow
-from PyQt5.QtCore import QAbstractTableModel, Qt, QModelIndex, QSize, QTimer
+from PyQt5.QtWidgets import QApplication, QMainWindow, QStyledItemDelegate, QStyleOptionButton, QStyle
+from PyQt5.QtCore import QAbstractTableModel, Qt, QModelIndex, QSize, QTimer, pyqtSignal
 from PyQt5.QtGui import QIcon, QPixmap
 
 from ui_playlist import Ui_MainWindow
@@ -77,6 +77,10 @@ class MainWindow(QMainWindow):
         self.progress_timer = QTimer()
         self.progress_timer.setInterval(500)  # Update every 0.5 seconds
         self.progress_timer.timeout.connect(self.update_progress_slider)
+
+        delegate = ButtonDelegate()
+        self.ui.tableView.setItemDelegateForColumn(4, delegate)
+        delegate.clicked.connect(self.handle_add_to_queue_click)
 
         self.ui.tableView.doubleClicked.connect(self.play_selected_song)
         self.ui.pushButton_playpause.pressed.connect(self.playpause)
@@ -188,6 +192,10 @@ class MainWindow(QMainWindow):
     def on_song_end(self, event):
         QTimer.singleShot(0, self.play_next_song)
 
+    def handle_add_to_queue_click(self, index):
+        row = index.row()
+        self.song_queue.add_song(self.model.songs[row])
+
 class MusicTableModel(QAbstractTableModel):
     def __init__(self, songs):
         super().__init__()
@@ -197,7 +205,7 @@ class MusicTableModel(QAbstractTableModel):
         return len(self.songs)
 
     def columnCount(self, parent=QModelIndex()):
-        return 4  # #, Cover, Title, Artist
+        return 5  # #, Cover, Title, Artist, Add to queue button
 
     def data(self, index, role):
         if not index.isValid():
@@ -213,6 +221,8 @@ class MusicTableModel(QAbstractTableModel):
                 return song["title"]
             elif col == 3:
                 return song["artist"]
+            elif col == 4:
+                return ""
 
         elif role == Qt.DecorationRole and col == 1:
             pixmap = QPixmap(song["cover"]).scaled(40, 40, Qt.KeepAspectRatio)
@@ -221,9 +231,26 @@ class MusicTableModel(QAbstractTableModel):
         return None
 
     def headerData(self, section, orientation, role):
-        headers = ["#", "Cover", "Title", "Artist"]
+        headers = ["#", "Cover", "Title", "Artist", ""]
         if role == Qt.DisplayRole and orientation == Qt.Horizontal:
             return headers[section]
+        
+class ButtonDelegate(QStyledItemDelegate):
+    clicked = pyqtSignal(QModelIndex)  # Emits the row/column of the button clicked
+
+    def paint(self, painter, option, index):
+        button = QStyleOptionButton()
+        button.rect = option.rect
+        button.text = "Q"
+        button.state = QStyle.State_Enabled
+
+        QApplication.style().drawControl(QStyle.CE_PushButton, button, painter)
+
+    def editorEvent(self, event, model, option, index):
+        if event.type() == event.MouseButtonRelease and option.rect.contains(event.pos()):
+            self.clicked.emit(index)
+            return True
+        return False
         
 
 if __name__ == "__main__":
