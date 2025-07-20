@@ -4,8 +4,8 @@ import re
 import vlc
 import random
 
-from PyQt5.QtWidgets import QApplication, QMainWindow, QStyledItemDelegate, QStyleOptionButton, QStyle
-from PyQt5.QtCore import QAbstractTableModel, Qt, QModelIndex, QSize, QTimer, pyqtSignal
+from PyQt5.QtWidgets import QApplication, QMainWindow, QStyledItemDelegate, QStyleOptionButton, QStyle, QDockWidget, QListWidget
+from PyQt5.QtCore import QAbstractTableModel, Qt, QModelIndex, QSize, QTimer, pyqtSignal, QStringListModel
 from PyQt5.QtGui import QIcon, QPixmap
 
 from ui_playlist import Ui_MainWindow
@@ -78,9 +78,14 @@ class MainWindow(QMainWindow):
         self.progress_timer.setInterval(500)  # Update every 0.5 seconds
         self.progress_timer.timeout.connect(self.update_progress_slider)
 
+        # Add "Add to queue" button to table
         delegate = ButtonDelegate()
         self.ui.tableView.setItemDelegateForColumn(4, delegate)
         delegate.clicked.connect(self.handle_add_to_queue_click)
+
+        #self.ui.queue_panel.hide()
+        self.queue_model = QStringListModel()
+        self.ui.listView_queue.setModel(self.queue_model)
 
         self.ui.tableView.doubleClicked.connect(self.play_selected_song)
         self.ui.pushButton_playpause.pressed.connect(self.playpause)
@@ -88,6 +93,8 @@ class MainWindow(QMainWindow):
         self.ui.horizontalSlider.valueChanged.connect(self.seek_from_slider)
         self.ui.pushButton_next.pressed.connect(self.play_next_song)
         self.ui.pushButton_previous.pressed.connect(self.play_previous_song)
+        self.ui.pushButton_view_queue.pressed.connect(self.toggle_queue_panel)
+        self.ui.toolButton_queue_panel_close.pressed.connect(self.toggle_queue_panel)
 
         events = self.player.event_manager()
         events.event_attach(vlc.EventType.MediaPlayerEndReached, self.on_song_end)
@@ -111,6 +118,7 @@ class MainWindow(QMainWindow):
 
         self.ui.pushButton_playpause.setEnabled(True)
         self.update_current_playing_ui()
+        self.update_queue_ui()
     
     def update_current_playing_ui(self):
         if self.current_song != None:
@@ -175,7 +183,9 @@ class MainWindow(QMainWindow):
 
         self.player.set_media(self.instance.media_new(self.current_song["file_path"]))
         self.player.play()
+
         self.update_current_playing_ui()
+        self.update_queue_ui()
 
     def play_previous_song(self):
         previous_song = self.song_queue.get_previous_song()
@@ -188,6 +198,7 @@ class MainWindow(QMainWindow):
         self.player.play()
 
         self.update_current_playing_ui()
+        self.update_queue_ui()
 
     def on_song_end(self, event):
         QTimer.singleShot(0, self.play_next_song)
@@ -195,6 +206,20 @@ class MainWindow(QMainWindow):
     def handle_add_to_queue_click(self, index):
         row = index.row()
         self.song_queue.add_song(self.model.songs[row])
+        self.update_queue_ui()
+
+    def toggle_queue_panel(self):
+        if self.ui.queue_panel.isVisible():
+            self.ui.queue_panel.hide()
+        else:
+            self.ui.queue_panel.show()
+
+    def update_queue_ui(self):
+        self.queue_model.setStringList([song["title"] for song in self.song_queue.queue])
+        index = self.queue_model.index(self.song_queue.current_index)
+
+        if index.isValid():
+            self.ui.listView_queue.setCurrentIndex(index)
 
 class MusicTableModel(QAbstractTableModel):
     def __init__(self, songs):
