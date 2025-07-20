@@ -4,7 +4,7 @@ import re
 import vlc
 
 from PyQt5.QtWidgets import QApplication, QMainWindow
-from PyQt5.QtCore import QAbstractTableModel, Qt, QModelIndex, QSize
+from PyQt5.QtCore import QAbstractTableModel, Qt, QModelIndex, QSize, QTimer
 from PyQt5.QtGui import QIcon, QPixmap
 
 from ui_playlist import Ui_MainWindow
@@ -16,6 +16,7 @@ class MainWindow(QMainWindow):
         self.current_song = None
         self.paused = None
         self.player = None
+        self.seeking = False
 
         super().__init__()
 
@@ -65,8 +66,15 @@ class MainWindow(QMainWindow):
         self.ui.tableView.resizeColumnsToContents()
         self.ui.tableView.setIconSize(QSize(30, 30))
 
+        # Create a timer for the song slider
+        self.progress_timer = QTimer()
+        self.progress_timer.setInterval(500)  # Update every 0.5 seconds
+        self.progress_timer.timeout.connect(self.update_progress_slider)
+
         self.ui.tableView.doubleClicked.connect(self.play_selected_song)
         self.ui.pushButton_playpause.pressed.connect(self.playpause)
+        self.ui.horizontalSlider.sliderPressed.connect(self.begin_seek_from_slider)
+        self.ui.horizontalSlider.valueChanged.connect(self.seek_from_slider)
 
  
     def play_selected_song(self, index):
@@ -99,8 +107,10 @@ class MainWindow(QMainWindow):
             self.ui.label_current_playing_artist.setText(self.current_song["artist"])
 
             if self.paused:
+                self.progress_timer.stop()
                 self.ui.pushButton_playpause.setText("Play")
-            else:    
+            else:
+                self.progress_timer.start()
                 self.ui.pushButton_playpause.setText("Pause")
 
     def playpause(self):
@@ -109,6 +119,36 @@ class MainWindow(QMainWindow):
         self.player.pause()
 
         self.update_current_playing_ui()
+
+    def update_progress_slider(self):
+        if(self.seeking):
+            return
+
+        if not self.paused:
+            length = self.player.get_length()  # in ms
+            pos = self.player.get_time()      # in ms
+
+        if length > 0:
+            value = int((pos / length) * self.ui.horizontalSlider.maximum())
+            self.ui.horizontalSlider.blockSignals(True)  # Prevent recursive seek
+            self.ui.horizontalSlider.setValue(value)
+            self.ui.horizontalSlider.blockSignals(False)
+
+    def begin_seek_from_slider(self):
+        self.seeking = True
+
+    def seek_from_slider(self):
+        slider_value = self.ui.horizontalSlider.value()
+        
+        if self.player:
+            length = self.player.get_length()
+            print(slider_value)
+            new_time = int((slider_value / self.ui.horizontalSlider.maximum()) * length)
+            self.player.set_time(new_time)
+            print("set time to " + str(new_time))
+
+        self.seeking = False
+
 
 
 class MusicTableModel(QAbstractTableModel):

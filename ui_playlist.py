@@ -56,6 +56,8 @@ class Ui_MainWindow(object):
         self.label_current_playing_artist.setObjectName("label_current_playing_artist")
         self.verticalLayout.addWidget(self.label_current_playing_artist)
         self.horizontalSlider = QtWidgets.QSlider(self.verticalLayoutWidget)
+        self.horizontalSlider.setMaximum(10000)
+        self.horizontalSlider.setTracking(False)
         self.horizontalSlider.setOrientation(QtCore.Qt.Horizontal)
         self.horizontalSlider.setObjectName("horizontalSlider")
         self.verticalLayout.addWidget(self.horizontalSlider)
@@ -95,13 +97,3 @@ class Ui_MainWindow(object):
         self.pushButton_previous.setText(_translate("MainWindow", "Previous"))
         self.pushButton_playpause.setText(_translate("MainWindow", "Play"))
         self.pushButton_next.setText(_translate("MainWindow", "Next"))
-
-
-if __name__ == "__main__":
-    import sys
-    app = QtWidgets.QApplication(sys.argv)
-    MainWindow = QtWidgets.QMainWindow()
-    ui = Ui_MainWindow()
-    ui.setupUi(MainWindow)
-    MainWindow.show()
-    sys.exit(app.exec_())
