@@ -2,12 +2,15 @@ import sys
 import os
 import re
 import vlc
+import random
 
 from PyQt5.QtWidgets import QApplication, QMainWindow
 from PyQt5.QtCore import QAbstractTableModel, Qt, QModelIndex, QSize, QTimer
 from PyQt5.QtGui import QIcon, QPixmap
 
 from ui_playlist import Ui_MainWindow
+
+from song_queue import SongQueue
 
 folder_path = "D://StreamripDownloads/Sveeee"
 
@@ -17,6 +20,10 @@ class MainWindow(QMainWindow):
         self.paused = None
         self.player = None
         self.seeking = False
+        self.song_queue = SongQueue()
+
+        self.instance = vlc.Instance()
+        self.player = self.instance.media_player_new()
 
         super().__init__()
 
@@ -75,6 +82,11 @@ class MainWindow(QMainWindow):
         self.ui.pushButton_playpause.pressed.connect(self.playpause)
         self.ui.horizontalSlider.sliderPressed.connect(self.begin_seek_from_slider)
         self.ui.horizontalSlider.valueChanged.connect(self.seek_from_slider)
+        self.ui.pushButton_next.pressed.connect(self.play_next_song)
+        self.ui.pushButton_previous.pressed.connect(self.play_previous_song)
+
+        events = self.player.event_manager()
+        events.event_attach(vlc.EventType.MediaPlayerEndReached, self.on_song_end)
 
  
     def play_selected_song(self, index):
@@ -82,14 +94,13 @@ class MainWindow(QMainWindow):
         self.current_song = self.model.songs[row]
         file_path = self.current_song["file_path"]
 
-        if self.player == None:
-            self.player = vlc.MediaPlayer()
+        self.song_queue.add_song(self.current_song)
 
         # Stop current song if one is playing
         if self.player.is_playing():
             self.player.stop()
 
-        self.player.set_media(vlc.Media(file_path))
+        self.player.set_media(self.instance.media_new(file_path))
         self.player.play()
 
         paused = False
@@ -137,19 +148,45 @@ class MainWindow(QMainWindow):
     def begin_seek_from_slider(self):
         self.seeking = True
 
-    def seek_from_slider(self):
+    def seek_from_slider(self):        
         slider_value = self.ui.horizontalSlider.value()
-        
-        if self.player:
-            length = self.player.get_length()
-            print(slider_value)
-            new_time = int((slider_value / self.ui.horizontalSlider.maximum()) * length)
-            self.player.set_time(new_time)
-            print("set time to " + str(new_time))
+        length = self.player.get_length()
+        new_time = int((slider_value / self.ui.horizontalSlider.maximum()) * length)
+        self.player.set_time(new_time)
 
         self.seeking = False
 
+    def play_next_song(self, event = None):
+        next_song = self.song_queue.get_next_song()
 
+        if(next_song == None):
+            next_song = random.choice(self.model.songs)
+            # Adds the random song if nothing is next in queue and moves current index to it
+            self.song_queue.add_song(next_song)
+            self.song_queue.get_next_song()
+
+        self.current_song = next_song
+        if self.player.is_playing():
+            self.player.stop()
+
+        self.player.set_media(self.instance.media_new(self.current_song["file_path"]))
+        self.player.play()
+        self.update_current_playing_ui()
+
+    def play_previous_song(self):
+        previous_song = self.song_queue.get_previous_song()
+        self.current_song = previous_song
+
+        if self.player.is_playing():
+            self.player.stop()
+
+        self.player.set_media(self.instance.media_new(previous_song["file_path"]))
+        self.player.play()
+
+        self.update_current_playing_ui()
+
+    def on_song_end(self, event):
+        QTimer.singleShot(0, self.play_next_song)
 
 class MusicTableModel(QAbstractTableModel):
     def __init__(self, songs):
