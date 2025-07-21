@@ -4,8 +4,8 @@ import re
 import vlc
 import random
 
-from PyQt5.QtWidgets import QApplication, QMainWindow, QStyledItemDelegate, QStyleOptionButton, QStyle, QDockWidget, QListWidget
-from PyQt5.QtCore import QAbstractTableModel, Qt, QModelIndex, QSize, QTimer, pyqtSignal, QStringListModel
+from PyQt5.QtWidgets import QApplication, QMainWindow, QStyledItemDelegate, QStyleOptionButton, QStyle
+from PyQt5.QtCore import QAbstractTableModel, Qt, QModelIndex, QSize, QTimer, pyqtSignal, QStringListModel, QSortFilterProxyModel, QPoint
 from PyQt5.QtGui import QIcon, QPixmap
 
 from ui_playlist import Ui_MainWindow
@@ -26,6 +26,9 @@ class MainWindow(QMainWindow):
         self.player = self.instance.media_player_new()
 
         super().__init__()
+
+        with open("modern_style.qss", "r") as f:
+            self.setStyleSheet(f.read())
 
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
@@ -69,9 +72,15 @@ class MainWindow(QMainWindow):
         songs.sort(key=lambda x: x["track"])
 
         self.model = MusicTableModel(songs)
-        self.ui.tableView.setModel(self.model)
+        self.proxy_model = QSortFilterProxyModel()
+        self.proxy_model.setSourceModel(self.model)
+        self.proxy_model.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        self.proxy_model.setFilterKeyColumn(-1)  # search across all columns
+
+        self.ui.tableView.setModel(self.proxy_model)
         self.ui.tableView.resizeColumnsToContents()
         self.ui.tableView.setIconSize(QSize(30, 30))
+
 
         # Create a timer for the song slider
         self.progress_timer = QTimer()
@@ -87,6 +96,13 @@ class MainWindow(QMainWindow):
         self.queue_model = QStringListModel()
         self.ui.listView_queue.setModel(self.queue_model)
 
+        self.setWindowFlags(Qt.FramelessWindowHint)
+        self.ui.widget_title_bar.setStyleSheet("""
+            QWidget {
+                background-color: #181818;
+            }
+        """)
+
         self.ui.tableView.doubleClicked.connect(self.play_selected_song)
         self.ui.pushButton_playpause.pressed.connect(self.playpause)
         self.ui.horizontalSlider.sliderPressed.connect(self.begin_seek_from_slider)
@@ -95,12 +111,15 @@ class MainWindow(QMainWindow):
         self.ui.pushButton_previous.pressed.connect(self.play_previous_song)
         self.ui.pushButton_view_queue.pressed.connect(self.toggle_queue_panel)
         self.ui.toolButton_queue_panel_close.pressed.connect(self.toggle_queue_panel)
+        self.ui.lineEdit_search.textChanged.connect(self.proxy_model.setFilterFixedString)
+        self.ui.toolButton_close_app.pressed.connect(self.close_app)
+        self.ui.toolButton_minimise_app.pressed.connect(self.minimise_app)
 
         events = self.player.event_manager()
         events.event_attach(vlc.EventType.MediaPlayerEndReached, self.on_song_end)
 
-    def play_selected_song(self, index):
-        row = index.row()
+    def play_selected_song(self, proxy_index):
+        row = self.proxy_model.mapToSource(proxy_index).row()
         self.current_song = self.model.songs[row]
         file_path = self.current_song["file_path"]
 
@@ -202,8 +221,8 @@ class MainWindow(QMainWindow):
     def on_song_end(self, event):
         QTimer.singleShot(0, self.play_next_song)
 
-    def handle_add_to_queue_click(self, index):
-        row = index.row()
+    def handle_add_to_queue_click(self, proxy_index):
+        row = self.proxy_model.mapToSource(proxy_index).row()
         self.song_queue.add_song(self.model.songs[row])
         if(len(self.song_queue.queue) == 1):
             print("YES")
@@ -222,6 +241,27 @@ class MainWindow(QMainWindow):
 
         if index.isValid():
             self.ui.listView_queue.setCurrentIndex(index)
+
+    # Handle title bar actions
+    def mousePressEvent(self, event):
+        if self.ui.widget_title_bar.underMouse():
+            self._drag_active = True
+            self._drag_position = event.globalPos() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if getattr(self, "_drag_active", False):
+            self.move(event.globalPos() - self._drag_position)
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        self._drag_active = False
+
+    def minimise_app(self):
+        self.showMinimized()
+
+    def close_app(self):
+        self.close()
 
 class MusicTableModel(QAbstractTableModel):
     def __init__(self, songs):

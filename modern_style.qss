@@ -1,0 +1,130 @@
+/* Apply global styling for a modern Spotify-like dark theme */
+
+QWidget {
+    background-color: #1E1E1E;
+    color: #FFFFFF;
+}
+
+QMainWindow {
+    background-color: #121212;
+    color: white;
+}
+
+QSplitter {
+    background-color: #121212;
+}
+
+QTableView {
+    background-color: #1E1E1E;
+    border: none;  /* Removes white border */
+    gridline-color: #2D2D2D;  /* Subtle grid lines */
+    selection-background-color: #3D6CB9;  /* Highlight for selected rows */
+    color: #FFFFFF;
+    alternate-background-color: #181818;
+}
+
+QHeaderView::section {
+    background-color: #2A2A2A;
+    color: #CCCCCC;
+    padding: 6px;
+    border: none;  /* Removes header cell borders */
+    font-weight: bold;
+}
+
+QTableView::item:hover {
+    background-color: rgba(100, 100, 255, 40);  /* Light hover effect */
+}
+
+QTableCornerButton::section {
+    background-color: #2A2A2A;
+    border: none;
+}
+
+QAbstractScrollArea::corner {
+    background-color: #2A2A2A;
+}
+
+QPushButton {
+    background-color: #1DB954;
+    color: white;
+    border: none;
+    border-radius: 18px;
+    padding: 8px 20px;
+    font-weight: bold;
+}
+
+QPushButton:disabled {
+    background-color: #555;
+    color: #ccc;
+}
+
+QPushButton:hover {
+    background-color: #1DB954;
+}
+
+QLineEdit {
+    background-color: #282828;
+    border: 1px solid #333;
+    border-radius: 10px;
+    color: white;
+    padding: 4px 10px;
+}
+
+QLabel {
+    color: white;
+    font-size: 14px;
+}
+
+QSlider::groove:horizontal {
+    border: 1px solid #333;
+    height: 6px;
+    background: #282828;
+    margin: 0px;
+    border-radius: 3px;
+}
+
+QSlider::handle:horizontal {
+    background: #1DB954;
+    border: 1px solid #333;
+    width: 12px;
+    margin: -4px 0;
+    border-radius: 6px;
+}
+
+QToolButton {
+    background-color: transparent;
+    color: #ccc;
+    font-weight: bold;
+    border: none;
+    font-size: 16px;
+}
+
+QToolButton:hover {
+    color: #fff;
+}
+
+QListView {
+    background-color: #181818;
+    color: white;
+    border: none;
+    selection-background-color: #1DB954;
+    selection-color: black;
+    padding: 5px;
+}
+
+/* Optional: style for horizontal line */
+QFrame#line {
+    background-color: #282828;
+    max-height: 1px;
+    border: none;
+} 
+
+/* Optional: add spacing between sections */
+QVBoxLayout > * {
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+QSplitter::handle {
+    background-color: #2A2A2A;
+}
