@@ -99,13 +99,12 @@ class MainWindow(QMainWindow):
         events = self.player.event_manager()
         events.event_attach(vlc.EventType.MediaPlayerEndReached, self.on_song_end)
 
- 
     def play_selected_song(self, index):
         row = index.row()
         self.current_song = self.model.songs[row]
         file_path = self.current_song["file_path"]
 
-        self.song_queue.add_song(self.current_song)
+        self.song_queue.add_song_current(self.current_song)
 
         # Stop current song if one is playing
         if self.player.is_playing():
@@ -206,6 +205,9 @@ class MainWindow(QMainWindow):
     def handle_add_to_queue_click(self, index):
         row = index.row()
         self.song_queue.add_song(self.model.songs[row])
+        if(len(self.song_queue.queue) == 1):
+            print("YES")
+            self.play_next_song()
         self.update_queue_ui()
 
     def toggle_queue_panel(self):
