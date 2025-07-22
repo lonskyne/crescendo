@@ -165,6 +165,13 @@
       </item>
       <item>
        <widget class="QLabel" name="label_current_playing_title">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
         <property name="text">
          <string/>
         </property>
@@ -271,7 +278,13 @@
         </layout>
        </item>
        <item>
-        <widget class="QListView" name="listView_queue"/>
+        <widget class="QListView" name="listView_queue">
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+        </widget>
        </item>
       </layout>
      </widget>

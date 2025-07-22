@@ -5,12 +5,13 @@ import vlc
 import random
 
 from PyQt5.QtWidgets import QApplication, QMainWindow, QStyledItemDelegate, QStyleOptionButton, QStyle
-from PyQt5.QtCore import QAbstractTableModel, Qt, QModelIndex, QSize, QTimer, pyqtSignal, QStringListModel, QSortFilterProxyModel, QPoint
-from PyQt5.QtGui import QIcon, QPixmap
+from PyQt5.QtCore import QAbstractTableModel, Qt, QModelIndex, QSize, QTimer, pyqtSignal, QStringListModel, QSortFilterProxyModel, QThread
+from PyQt5.QtGui import QIcon, QPainter, QPainterPath, QPixmap
 
 from ui_playlist import Ui_MainWindow
 
 from song_queue import SongQueue
+from metadata_loader import MetadataLoader
 
 folder_path = "D://StreamripDownloads/Sveeee"
 
@@ -44,43 +45,28 @@ class MainWindow(QMainWindow):
 
         self.ui.label_track_count.setText(str(song_count) + " tracks")
 
-        # Populate song list
-        files = [
-            f for f in os.listdir(folder_path)
-            if os.path.isfile(os.path.join(folder_path, f))
-        ]
-
-        songs = []
-
-        for file in files:
-            match = re.match(r"(\d+)\.\s*(.+?)\s*-\s*(.+?)(?:\s*\(.*\))?\.flac", file)
-            if match:
-                track_num = int(match.group(1))
-                artist = match.group(2).strip()
-                title = match.group(3).strip()
-
-                song = {
-                    "track": track_num,
-                    "title": title,
-                    "artist": artist,
-                    "cover": folder_path + "/__artwork/default.jpg",
-                    "file_path": os.path.join(folder_path, file)
-                }
-                songs.append(song)
-
-        # Sort by track number
-        songs.sort(key=lambda x: x["track"])
-
-        self.model = MusicTableModel(songs)
-        self.proxy_model = QSortFilterProxyModel()
+        # Setup the table model
+        self.model = MusicTableModel([])
+        self.proxy_model = CustomSortFilterProxyModel()
         self.proxy_model.setSourceModel(self.model)
         self.proxy_model.setFilterCaseSensitivity(Qt.CaseInsensitive)
-        self.proxy_model.setFilterKeyColumn(-1)  # search across all columns
+        self.proxy_model.setFilterKeyColumn(-1)
 
         self.ui.tableView.setModel(self.proxy_model)
-        self.ui.tableView.resizeColumnsToContents()
-        self.ui.tableView.setIconSize(QSize(30, 30))
+        self.ui.tableView.setIconSize(QSize(40, 40))
 
+        self.ui.tableView.setColumnWidth(0, 30)   # Track number
+        self.ui.tableView.setColumnWidth(1, 50)   # Cover
+        self.ui.tableView.setColumnWidth(2, 350)  # Title
+        self.ui.tableView.setColumnWidth(3, 300)  # Artist
+        self.ui.tableView.setColumnWidth(4, 40)   # Queue button
+        self.ui.tableView.setTextElideMode(Qt.ElideRight)
+        self.ui.tableView.setSortingEnabled(True)
+        self.ui.tableView.sortByColumn(0, Qt.AscendingOrder)
+        self.ui.tableView.verticalHeader().setDefaultSectionSize(50)  # or any height you want
+
+        # Start the background thread to load metadata
+        self.load_metadata_in_background()
 
         # Create a timer for the song slider
         self.progress_timer = QTimer()
@@ -100,6 +86,11 @@ class MainWindow(QMainWindow):
         self.ui.widget_title_bar.setStyleSheet("""
             QWidget {
                 background-color: #181818;
+            }
+        """)
+        self.ui.toolButton_close_app.setStyleSheet("""
+            QWidget {
+                background-color: rgb(230, 48, 48);
             }
         """)
 
@@ -166,8 +157,8 @@ class MainWindow(QMainWindow):
             return
 
         if not self.paused:
-            length = self.player.get_length()  # in ms
-            pos = self.player.get_time()      # in ms
+            length = self.player.get_length()
+            pos = self.player.get_time()
 
         if length > 0:
             value = int((pos / length) * self.ui.horizontalSlider.maximum())
@@ -202,6 +193,8 @@ class MainWindow(QMainWindow):
         self.player.set_media(self.instance.media_new(self.current_song["file_path"]))
         self.player.play()
 
+        self.paused = False
+
         self.update_current_playing_ui()
         self.update_queue_ui()
 
@@ -215,6 +208,8 @@ class MainWindow(QMainWindow):
         self.player.set_media(self.instance.media_new(previous_song["file_path"]))
         self.player.play()
 
+        self.paused = False
+
         self.update_current_playing_ui()
         self.update_queue_ui()
 
@@ -224,9 +219,10 @@ class MainWindow(QMainWindow):
     def handle_add_to_queue_click(self, proxy_index):
         row = self.proxy_model.mapToSource(proxy_index).row()
         self.song_queue.add_song(self.model.songs[row])
+
         if(len(self.song_queue.queue) == 1):
-            print("YES")
             self.play_next_song()
+
         self.update_queue_ui()
 
     def toggle_queue_panel(self):
@@ -236,7 +232,7 @@ class MainWindow(QMainWindow):
             self.ui.queue_panel.show()
 
     def update_queue_ui(self):
-        self.queue_model.setStringList([song["title"] for song in self.song_queue.queue])
+        self.queue_model.setStringList([(song["title"] + " - " + song["artist"]) for song in self.song_queue.queue])
         index = self.queue_model.index(self.song_queue.current_index)
 
         if index.isValid():
@@ -262,6 +258,30 @@ class MainWindow(QMainWindow):
 
     def close_app(self):
         self.close()
+
+    def load_metadata_in_background(self):
+        files = [
+            f for f in os.listdir(folder_path)
+            if os.path.isfile(os.path.join(folder_path, f))
+        ]
+
+        self.thread = QThread()
+        self.worker = MetadataLoader(files, folder_path)
+        self.worker.moveToThread(self.thread)
+
+        self.thread.started.connect(self.worker.run)
+        self.worker.song_loaded.connect(self.add_song_to_model)
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+
+        self.worker.start()
+
+    def add_song_to_model(self, song):
+        self.model.beginInsertRows(QModelIndex(), len(self.model.songs), len(self.model.songs))
+        self.model.songs.append(song)
+        self.model.endInsertRows()
+        self.ui.label_track_count.setText(f"{len(self.model.songs)} tracks")
 
 class MusicTableModel(QAbstractTableModel):
     def __init__(self, songs):
@@ -292,8 +312,9 @@ class MusicTableModel(QAbstractTableModel):
                 return ""
 
         elif role == Qt.DecorationRole and col == 1:
-            pixmap = QPixmap(song["cover"]).scaled(40, 40, Qt.KeepAspectRatio)
-            return QIcon(pixmap)
+            pixmap = song["cover"].scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            rounded = self.rounded_pixmap(pixmap)
+            return QIcon(rounded)
 
         return None
 
@@ -301,6 +322,21 @@ class MusicTableModel(QAbstractTableModel):
         headers = ["#", "Cover", "Title", "Artist", ""]
         if role == Qt.DisplayRole and orientation == Qt.Horizontal:
             return headers[section]
+        
+    def rounded_pixmap(self, pixmap, radius=5):
+        size = pixmap.size()
+        rounded = QPixmap(size)
+        rounded.fill(Qt.transparent)
+
+        painter = QPainter(rounded)
+        painter.setRenderHint(QPainter.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, size.width(), size.height(), radius, radius)
+        painter.setClipPath(path)
+        painter.drawPixmap(0, 0, pixmap)
+        painter.end()
+
+        return rounded
         
 class ButtonDelegate(QStyledItemDelegate):
     clicked = pyqtSignal(QModelIndex)  # Emits the row/column of the button clicked
@@ -318,7 +354,21 @@ class ButtonDelegate(QStyledItemDelegate):
             self.clicked.emit(index)
             return True
         return False
-        
+    
+class CustomSortFilterProxyModel(QSortFilterProxyModel):
+    def lessThan(self, left, right):
+        column = left.column()
+
+        left_data = self.sourceModel().data(left, Qt.DisplayRole)
+        right_data = self.sourceModel().data(right, Qt.DisplayRole)
+
+        if column == 0:  # Track number column
+            try:
+                return int(left_data) < int(right_data)
+            except ValueError:
+                return False
+
+        return super().lessThan(left, right)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

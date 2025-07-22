@@ -83,6 +83,16 @@ QSlider::groove:horizontal {
     border-radius: 3px;
 }
 
+QSlider::sub-page:horizontal {
+    background: #1DB954;  /* Green before the handle (Spotify-like) */
+    border-radius: 3px;
+}
+
+QSlider::add-page:horizontal {
+    background: #444444;  /* Dark gray after the handle */
+    border-radius: 3px;
+}
+
 QSlider::handle:horizontal {
     background: #1DB954;
     border: 1px solid #333;
@@ -110,6 +120,11 @@ QListView {
     selection-background-color: #1DB954;
     selection-color: black;
     padding: 5px;
+}
+
+QListView::item:selected {
+    background-color: #1DB954;  /* green background when selected */
+    color: black;                /* text color when selected */
 }
 
 /* Optional: style for horizontal line */
