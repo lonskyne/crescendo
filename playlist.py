@@ -1,17 +1,16 @@
-import sys
 import os
-import re
 import vlc
 import random
 
-from PyQt5.QtWidgets import QApplication, QMainWindow, QStyledItemDelegate, QStyleOptionButton, QStyle
-from PyQt5.QtCore import QAbstractTableModel, Qt, QModelIndex, QSize, QTimer, pyqtSignal, QStringListModel, QSortFilterProxyModel, QThread
-from PyQt5.QtGui import QIcon, QPainter, QPainterPath, QPixmap
+from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import QMainWindow
+from PyQt5.QtCore import Qt, QModelIndex, QSize, QTimer, QStringListModel, QThread
 
 from ui_playlist import Ui_MainWindow
 
 from song_queue import SongQueue
 from metadata_loader import MetadataLoader
+from playlist_tableview import MusicTableModel, ButtonDelegate, CustomSortFilterProxyModel
 
 folder_path = "D://StreamripDownloads/Sveeee"
 
@@ -22,6 +21,7 @@ class MainWindow(QMainWindow):
         self.player = None
         self.seeking = False
         self.song_queue = SongQueue()
+        self.shuffle = True
 
         self.instance = vlc.Instance()
         self.player = self.instance.media_player_new()
@@ -63,7 +63,7 @@ class MainWindow(QMainWindow):
         self.ui.tableView.setTextElideMode(Qt.ElideRight)
         self.ui.tableView.setSortingEnabled(True)
         self.ui.tableView.sortByColumn(0, Qt.AscendingOrder)
-        self.ui.tableView.verticalHeader().setDefaultSectionSize(50)  # or any height you want
+        self.ui.tableView.verticalHeader().setDefaultSectionSize(50)
 
         # Start the background thread to load metadata
         self.load_metadata_in_background()
@@ -78,21 +78,8 @@ class MainWindow(QMainWindow):
         self.ui.tableView.setItemDelegateForColumn(4, delegate)
         delegate.clicked.connect(self.handle_add_to_queue_click)
 
-        #self.ui.queue_panel.hide()
         self.queue_model = QStringListModel()
         self.ui.listView_queue.setModel(self.queue_model)
-
-        self.setWindowFlags(Qt.FramelessWindowHint)
-        self.ui.widget_title_bar.setStyleSheet("""
-            QWidget {
-                background-color: #181818;
-            }
-        """)
-        self.ui.toolButton_close_app.setStyleSheet("""
-            QWidget {
-                background-color: rgb(230, 48, 48);
-            }
-        """)
 
         self.ui.tableView.doubleClicked.connect(self.play_selected_song)
         self.ui.pushButton_playpause.pressed.connect(self.playpause)
@@ -103,11 +90,13 @@ class MainWindow(QMainWindow):
         self.ui.pushButton_view_queue.pressed.connect(self.toggle_queue_panel)
         self.ui.toolButton_queue_panel_close.pressed.connect(self.toggle_queue_panel)
         self.ui.lineEdit_search.textChanged.connect(self.proxy_model.setFilterFixedString)
-        self.ui.toolButton_close_app.pressed.connect(self.close_app)
-        self.ui.toolButton_minimise_app.pressed.connect(self.minimise_app)
+        self.ui.pushButton_shuffle.pressed.connect(self.toggle_shuffle)
 
         events = self.player.event_manager()
         events.event_attach(vlc.EventType.MediaPlayerEndReached, self.on_song_end)
+        
+        self.ui.splitter.setSizes([int(self.width() * 0.75), int(self.width() * 0.25)])
+        self.ui.queue_panel.hide()
 
     def play_selected_song(self, proxy_index):
         row = self.proxy_model.mapToSource(proxy_index).row()
@@ -116,7 +105,6 @@ class MainWindow(QMainWindow):
 
         self.song_queue.add_song_current(self.current_song)
 
-        # Stop current song if one is playing
         if self.player.is_playing():
             self.player.stop()
 
@@ -140,10 +128,10 @@ class MainWindow(QMainWindow):
 
             if self.paused:
                 self.progress_timer.stop()
-                self.ui.pushButton_playpause.setText("Play")
+                self.ui.pushButton_playpause.setIcon(QIcon("./icons/play.png"))
             else:
                 self.progress_timer.start()
-                self.ui.pushButton_playpause.setText("Pause")
+                self.ui.pushButton_playpause.setIcon(QIcon("./icons/pause.png"))
 
     def playpause(self):
         self.paused = not self.paused
@@ -181,8 +169,18 @@ class MainWindow(QMainWindow):
         next_song = self.song_queue.get_next_song()
 
         if(next_song == None):
-            next_song = random.choice(self.model.songs)
-            # Adds the random song if nothing is next in queue and moves current index to it
+            if(self.shuffle):
+                # Adds the random song if nothing is next in queue and moves current index to it
+                next_song = random.choice(self.model.songs)
+            else:
+                # Find current row by comparing song dicts
+                for row in range(self.model.rowCount()):
+                    song = self.model.songs[row]  # assuming you store it like this
+                    if song == self.current_song:
+                        next_row = (row + 1) % self.model.rowCount()
+                        next_song = self.model.songs[next_row]
+                        break
+
             self.song_queue.add_song(next_song)
             self.song_queue.get_next_song()
 
@@ -238,21 +236,6 @@ class MainWindow(QMainWindow):
         if index.isValid():
             self.ui.listView_queue.setCurrentIndex(index)
 
-    # Handle title bar actions
-    def mousePressEvent(self, event):
-        if self.ui.widget_title_bar.underMouse():
-            self._drag_active = True
-            self._drag_position = event.globalPos() - self.frameGeometry().topLeft()
-            event.accept()
-
-    def mouseMoveEvent(self, event):
-        if getattr(self, "_drag_active", False):
-            self.move(event.globalPos() - self._drag_position)
-            event.accept()
-
-    def mouseReleaseEvent(self, event):
-        self._drag_active = False
-
     def minimise_app(self):
         self.showMinimized()
 
@@ -283,95 +266,5 @@ class MainWindow(QMainWindow):
         self.model.endInsertRows()
         self.ui.label_track_count.setText(f"{len(self.model.songs)} tracks")
 
-class MusicTableModel(QAbstractTableModel):
-    def __init__(self, songs):
-        super().__init__()
-        self.songs = songs
-
-    def rowCount(self, parent=QModelIndex()):
-        return len(self.songs)
-
-    def columnCount(self, parent=QModelIndex()):
-        return 5  # #, Cover, Title, Artist, Add to queue button
-
-    def data(self, index, role):
-        if not index.isValid():
-            return None
-        row = index.row()
-        col = index.column()
-        song = self.songs[row]
-
-        if role == Qt.DisplayRole:
-            if col == 0:
-                return str(song["track"])
-            elif col == 2:
-                return song["title"]
-            elif col == 3:
-                return song["artist"]
-            elif col == 4:
-                return ""
-
-        elif role == Qt.DecorationRole and col == 1:
-            pixmap = song["cover"].scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            rounded = self.rounded_pixmap(pixmap)
-            return QIcon(rounded)
-
-        return None
-
-    def headerData(self, section, orientation, role):
-        headers = ["#", "Cover", "Title", "Artist", ""]
-        if role == Qt.DisplayRole and orientation == Qt.Horizontal:
-            return headers[section]
-        
-    def rounded_pixmap(self, pixmap, radius=5):
-        size = pixmap.size()
-        rounded = QPixmap(size)
-        rounded.fill(Qt.transparent)
-
-        painter = QPainter(rounded)
-        painter.setRenderHint(QPainter.Antialiasing)
-        path = QPainterPath()
-        path.addRoundedRect(0, 0, size.width(), size.height(), radius, radius)
-        painter.setClipPath(path)
-        painter.drawPixmap(0, 0, pixmap)
-        painter.end()
-
-        return rounded
-        
-class ButtonDelegate(QStyledItemDelegate):
-    clicked = pyqtSignal(QModelIndex)  # Emits the row/column of the button clicked
-
-    def paint(self, painter, option, index):
-        button = QStyleOptionButton()
-        button.rect = option.rect
-        button.text = "Q"
-        button.state = QStyle.State_Enabled
-
-        QApplication.style().drawControl(QStyle.CE_PushButton, button, painter)
-
-    def editorEvent(self, event, model, option, index):
-        if event.type() == event.MouseButtonRelease and option.rect.contains(event.pos()):
-            self.clicked.emit(index)
-            return True
-        return False
-    
-class CustomSortFilterProxyModel(QSortFilterProxyModel):
-    def lessThan(self, left, right):
-        column = left.column()
-
-        left_data = self.sourceModel().data(left, Qt.DisplayRole)
-        right_data = self.sourceModel().data(right, Qt.DisplayRole)
-
-        if column == 0:  # Track number column
-            try:
-                return int(left_data) < int(right_data)
-            except ValueError:
-                return False
-
-        return super().lessThan(left, right)
-
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec_())
+    def toggle_shuffle(self):
+        self.shuffle = not self.shuffle

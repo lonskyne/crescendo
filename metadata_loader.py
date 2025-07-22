@@ -37,8 +37,8 @@ class MetadataLoader(QThread):
     def extract_flac_image(self, file_path):
         audio = FLAC(file_path)
         if audio.pictures:
-            picture = audio.pictures[0]  # Usually the first one is the album art
-            return picture.data  # This is raw image data (e.g., JPEG or PNG)
+            picture = audio.pictures[0]
+            return picture.data
         return None
 
     def get_album_art_pixmap(self, file_path):

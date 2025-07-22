@@ -1,5 +1,3 @@
-/* Apply global styling for a modern Spotify-like dark theme */
-
 QWidget {
     background-color: #1E1E1E;
     color: #FFFFFF;
@@ -16,9 +14,9 @@ QSplitter {
 
 QTableView {
     background-color: #1E1E1E;
-    border: none;  /* Removes white border */
-    gridline-color: #2D2D2D;  /* Subtle grid lines */
-    selection-background-color: #3D6CB9;  /* Highlight for selected rows */
+    border: none;
+    gridline-color: #2D2D2D;
+    selection-background-color: #1DB954;
     color: #FFFFFF;
     alternate-background-color: #181818;
 }
@@ -27,12 +25,12 @@ QHeaderView::section {
     background-color: #2A2A2A;
     color: #CCCCCC;
     padding: 6px;
-    border: none;  /* Removes header cell borders */
+    border: none;
     font-weight: bold;
 }
 
 QTableView::item:hover {
-    background-color: rgba(100, 100, 255, 40);  /* Light hover effect */
+    background-color: rgba(100, 100, 255, 40);
 }
 
 QTableCornerButton::section {
@@ -59,7 +57,15 @@ QPushButton:disabled {
 }
 
 QPushButton:hover {
-    background-color: #1DB954;
+    background-color:rgb(81, 184, 117);
+}
+
+QPushButton:pressed {
+    background-color:rgb(42, 145, 78);
+}
+
+QPushButton:checked {
+    background-color: #555;
 }
 
 QLineEdit {
@@ -72,7 +78,6 @@ QLineEdit {
 
 QLabel {
     color: white;
-    font-size: 14px;
 }
 
 QSlider::groove:horizontal {
@@ -84,12 +89,12 @@ QSlider::groove:horizontal {
 }
 
 QSlider::sub-page:horizontal {
-    background: #1DB954;  /* Green before the handle (Spotify-like) */
+    background: #1DB954;
     border-radius: 3px;
 }
 
 QSlider::add-page:horizontal {
-    background: #444444;  /* Dark gray after the handle */
+    background: #444444;
     border-radius: 3px;
 }
 
@@ -123,8 +128,8 @@ QListView {
 }
 
 QListView::item:selected {
-    background-color: #1DB954;  /* green background when selected */
-    color: black;                /* text color when selected */
+    background-color: #1DB954;
+    color: black;
 }
 
 /* Optional: style for horizontal line */
