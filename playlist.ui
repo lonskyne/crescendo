@@ -145,7 +145,7 @@
              </font>
             </property>
             <property name="text">
-             <string>Song name</string>
+             <string/>
             </property>
             <property name="alignment">
              <set>Qt::AlignCenter</set>
@@ -160,7 +160,7 @@
              </font>
             </property>
             <property name="text">
-             <string>Artist</string>
+             <string/>
             </property>
             <property name="alignment">
              <set>Qt::AlignCenter</set>

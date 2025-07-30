@@ -111,7 +111,7 @@ class MainWindow(QMainWindow):
         self.player.set_media(self.instance.media_new(file_path))
         self.player.play()
 
-        paused = False
+        self.paused = False
 
         self.ui.pushButton_playpause.setEnabled(True)
         self.update_current_playing_ui()
@@ -173,12 +173,17 @@ class MainWindow(QMainWindow):
                 # Adds the random song if nothing is next in queue and moves current index to it
                 next_song = random.choice(self.model.songs)
             else:
-                # Find current row by comparing song dicts
-                for row in range(self.model.rowCount()):
-                    song = self.model.songs[row]  # assuming you store it like this
+                # Find current row by comparing song dicts in proxy model order
+                for proxy_row in range(self.proxy_model.rowCount()):
+                    # Map the proxy row to the source model row
+                    source_index = self.proxy_model.mapToSource(self.proxy_model.index(proxy_row, 0))
+                    source_row = source_index.row()
+                    song = self.model.songs[source_row]
+
                     if song == self.current_song:
-                        next_row = (row + 1) % self.model.rowCount()
-                        next_song = self.model.songs[next_row]
+                        next_proxy_row = (proxy_row + 1) % self.proxy_model.rowCount()
+                        next_source_index = self.proxy_model.mapToSource(self.proxy_model.index(next_proxy_row, 0))
+                        next_song = self.model.songs[next_source_index.row()]
                         break
 
             self.song_queue.add_song(next_song)

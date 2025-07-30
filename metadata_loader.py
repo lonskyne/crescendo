@@ -35,16 +35,20 @@ class MetadataLoader(QThread):
         self.finished.emit()
 
     def extract_flac_image(self, file_path):
-        audio = FLAC(file_path)
-        if audio.pictures:
-            picture = audio.pictures[0]
-            return picture.data
+        try:
+            audio = FLAC(file_path)
+            if audio.pictures:
+                picture = audio.pictures[0]
+                return picture.data
+        except:
+            pass
+
         return None
 
     def get_album_art_pixmap(self, file_path):
         data = self.extract_flac_image(file_path)
         if not data:
-            data = self.extract_flac_image(self.folder_path + "/artworks/default.jpg")
+            return None
 
         pixmap = QPixmap()
         pixmap.loadFromData(QByteArray(data))
