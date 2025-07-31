@@ -2,7 +2,9 @@ from PyQt5.QtWidgets import QApplication, QStyledItemDelegate, QStyleOptionButto
 from PyQt5.QtCore import QAbstractTableModel, Qt, QModelIndex, pyqtSignal, QSortFilterProxyModel
 from PyQt5.QtGui import QIcon, QPainter, QPainterPath, QPixmap
 
+
 class MusicTableModel(QAbstractTableModel):
+
     def __init__(self, songs):
         super().__init__()
         self.songs = songs
@@ -31,6 +33,9 @@ class MusicTableModel(QAbstractTableModel):
                 return ""
 
         elif role == Qt.DecorationRole and col == 1:
+            if song["cover"] is None:
+                return QIcon()
+
             pixmap = song["cover"].scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             rounded = self.rounded_pixmap(pixmap)
             return QIcon(rounded)
@@ -41,7 +46,7 @@ class MusicTableModel(QAbstractTableModel):
         headers = ["#", "Cover", "Title", "Artist", ""]
         if role == Qt.DisplayRole and orientation == Qt.Horizontal:
             return headers[section]
-        
+
     def rounded_pixmap(self, pixmap, radius=5):
         size = pixmap.size()
         rounded = QPixmap(size)
@@ -56,8 +61,10 @@ class MusicTableModel(QAbstractTableModel):
         painter.end()
 
         return rounded
-        
+
+
 class ButtonDelegate(QStyledItemDelegate):
+
     clicked = pyqtSignal(QModelIndex)  # Emits the row/column of the button clicked
 
     def paint(self, painter, option, index):
@@ -73,8 +80,10 @@ class ButtonDelegate(QStyledItemDelegate):
             self.clicked.emit(index)
             return True
         return False
-    
+
 class CustomSortFilterProxyModel(QSortFilterProxyModel):
+
+
     def lessThan(self, left, right):
         column = left.column()
 

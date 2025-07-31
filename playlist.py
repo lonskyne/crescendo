@@ -12,9 +12,10 @@ from song_queue import SongQueue
 from metadata_loader import MetadataLoader
 from playlist_tableview import MusicTableModel, ButtonDelegate, CustomSortFilterProxyModel
 
-folder_path = "D://StreamripDownloads/Sveeee"
+folder_path = "/home/lonskyne/Music/Sveeee"
 
 class MainWindow(QMainWindow):
+
     def __init__(self):
         self.current_song = None
         self.paused = None
@@ -94,7 +95,7 @@ class MainWindow(QMainWindow):
 
         events = self.player.event_manager()
         events.event_attach(vlc.EventType.MediaPlayerEndReached, self.on_song_end)
-        
+
         self.ui.splitter.setSizes([int(self.width() * 0.75), int(self.width() * 0.25)])
         self.ui.queue_panel.hide()
 

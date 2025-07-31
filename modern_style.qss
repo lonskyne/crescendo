@@ -16,7 +16,7 @@ QTableView {
     background-color: #1E1E1E;
     border: none;
     gridline-color: #2D2D2D;
-    selection-background-color: #1DB954;
+    selection-background-color: #5553d6;
     color: #FFFFFF;
     alternate-background-color: #181818;
 }
@@ -43,7 +43,7 @@ QAbstractScrollArea::corner {
 }
 
 QPushButton {
-    background-color: #1DB954;
+    background-color: #5553d6;
     color: white;
     border: none;
     border-radius: 18px;
@@ -89,7 +89,7 @@ QSlider::groove:horizontal {
 }
 
 QSlider::sub-page:horizontal {
-    background: #1DB954;
+    background: #5553d6;
     border-radius: 3px;
 }
 
@@ -99,7 +99,7 @@ QSlider::add-page:horizontal {
 }
 
 QSlider::handle:horizontal {
-    background: #1DB954;
+    background: #5553d6;
     border: 1px solid #333;
     width: 12px;
     margin: -4px 0;
@@ -122,13 +122,13 @@ QListView {
     background-color: #181818;
     color: white;
     border: none;
-    selection-background-color: #1DB954;
+    selection-background-color: #5553d6;
     selection-color: black;
     padding: 5px;
 }
 
 QListView::item:selected {
-    background-color: #1DB954;
+    background-color: #5553d6;
     color: black;
 }
 

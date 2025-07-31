@@ -3,9 +3,11 @@ import os
 import re
 
 from mutagen.flac import FLAC
+from mutagen.id3 import ID3, APIC
 
 from PyQt5.QtCore import pyqtSignal, QByteArray, QThread
 from PyQt5.QtGui import QPixmap
+
 
 class MetadataLoader(QThread):
     finished = pyqtSignal()
@@ -18,7 +20,7 @@ class MetadataLoader(QThread):
 
     def run(self):
         for file in self.song_files:
-            match = re.match(r"(\d+)\.\s*(.+?)\s*-\s*(.+?)(?:\s*\(.*\))?\.flac", file)
+            match = re.match(r"(\d+)\.\s*(.+?)\s*-\s*(.+?)(?:\s*\(.*\))?\.(flac|mp3)", file)
             if match:
                 track_num = int(match.group(1))
                 artist = match.group(2).strip()
@@ -34,6 +36,19 @@ class MetadataLoader(QThread):
                 self.song_loaded.emit(song)
         self.finished.emit()
 
+    def get_album_art_pixmap(self, file_path):
+        if file_path.lower().endswith('.flac'):
+            data = self.extract_flac_image(file_path)
+        if file_path.lower().endswith('.mp3'):
+            data = self.extract_mp3_image(file_path)
+
+        if not data:
+            return None
+
+        pixmap = QPixmap()
+        pixmap.loadFromData(QByteArray(data))
+        return pixmap
+
     def extract_flac_image(self, file_path):
         try:
             audio = FLAC(file_path)
@@ -45,11 +60,13 @@ class MetadataLoader(QThread):
 
         return None
 
-    def get_album_art_pixmap(self, file_path):
-        data = self.extract_flac_image(file_path)
-        if not data:
-            return None
+    def extract_mp3_image(self, file_path):
+        try:
+            audio = ID3(file_path)
+            for tag in audio.values():
+                if isinstance(tag, APIC):  # APIC = Attached Picture
+                    return tag.data
+        except:
+            pass
 
-        pixmap = QPixmap()
-        pixmap.loadFromData(QByteArray(data))
-        return pixmap
+        return None
