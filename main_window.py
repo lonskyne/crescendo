@@ -11,8 +11,10 @@ from ui_playlist import Ui_MainWindow
 from song_queue import SongQueue
 from metadata_loader import MetadataLoader
 from playlist_tableview import MusicTableModel, ButtonDelegate, CustomSortFilterProxyModel
+from song_finder_dialog import SongFinderDialog
 
 folder_path = "/home/lonskyne/Music/Sveeee"
+
 
 class MainWindow(QMainWindow):
 
@@ -23,6 +25,7 @@ class MainWindow(QMainWindow):
         self.seeking = False
         self.song_queue = SongQueue()
         self.shuffle = True
+        self.song_finder_dialog = SongFinderDialog()
 
         self.instance = vlc.Instance()
         self.player = self.instance.media_player_new()
@@ -84,19 +87,25 @@ class MainWindow(QMainWindow):
 
         self.ui.tableView.doubleClicked.connect(self.play_selected_song)
         self.ui.pushButton_playpause.pressed.connect(self.playpause)
-        self.ui.horizontalSlider.sliderPressed.connect(self.begin_seek_from_slider)
+        self.ui.horizontalSlider.sliderPressed.connect(
+            self.begin_seek_from_slider)
         self.ui.horizontalSlider.valueChanged.connect(self.seek_from_slider)
         self.ui.pushButton_next.pressed.connect(self.play_next_song)
         self.ui.pushButton_previous.pressed.connect(self.play_previous_song)
         self.ui.pushButton_view_queue.pressed.connect(self.toggle_queue_panel)
-        self.ui.toolButton_queue_panel_close.pressed.connect(self.toggle_queue_panel)
-        self.ui.lineEdit_search.textChanged.connect(self.proxy_model.setFilterFixedString)
+        self.ui.toolButton_queue_panel_close.pressed.connect(
+            self.toggle_queue_panel)
+        self.ui.lineEdit_search.textChanged.connect(
+            self.proxy_model.setFilterFixedString)
         self.ui.pushButton_shuffle.pressed.connect(self.toggle_shuffle)
+        self.ui.pushButton_add_song.pressed.connect(self.show_song_finder)
 
         events = self.player.event_manager()
-        events.event_attach(vlc.EventType.MediaPlayerEndReached, self.on_song_end)
+        events.event_attach(
+            vlc.EventType.MediaPlayerEndReached, self.on_song_end)
 
-        self.ui.splitter.setSizes([int(self.width() * 0.75), int(self.width() * 0.25)])
+        self.ui.splitter.setSizes(
+            [int(self.width() * 0.75), int(self.width() * 0.25)])
         self.ui.queue_panel.hide()
 
     def play_selected_song(self, proxy_index):
@@ -114,25 +123,27 @@ class MainWindow(QMainWindow):
 
         self.paused = False
 
-        self.ui.pushButton_playpause.setEnabled(True)
         self.update_current_playing_ui()
         self.update_queue_ui()
-    
+
     def update_current_playing_ui(self):
-        if self.current_song != None:
+        if self.current_song is not None:
             self.ui.pushButton_playpause.setEnabled(True)
             self.ui.pushButton_previous.setEnabled(True)
             self.ui.pushButton_next.setEnabled(True)
 
-            self.ui.label_current_playing_title.setText(self.current_song["title"])
-            self.ui.label_current_playing_artist.setText(self.current_song["artist"])
+            self.ui.label_current_playing_title.setText(
+                self.current_song["title"])
+            self.ui.label_current_playing_artist.setText(
+                self.current_song["artist"])
 
             if self.paused:
                 self.progress_timer.stop()
                 self.ui.pushButton_playpause.setIcon(QIcon("./icons/play.png"))
             else:
                 self.progress_timer.start()
-                self.ui.pushButton_playpause.setIcon(QIcon("./icons/pause.png"))
+                self.ui.pushButton_playpause.setIcon(
+                    QIcon("./icons/pause.png"))
 
     def playpause(self):
         self.paused = not self.paused
@@ -142,7 +153,7 @@ class MainWindow(QMainWindow):
         self.update_current_playing_ui()
 
     def update_progress_slider(self):
-        if(self.seeking):
+        if (self.seeking):
             return
 
         if not self.paused:
@@ -151,39 +162,44 @@ class MainWindow(QMainWindow):
 
         if length > 0:
             value = int((pos / length) * self.ui.horizontalSlider.maximum())
-            self.ui.horizontalSlider.blockSignals(True)  # Prevent recursive seek
+            self.ui.horizontalSlider.blockSignals(
+                True)  # Prevent recursive seek
             self.ui.horizontalSlider.setValue(value)
             self.ui.horizontalSlider.blockSignals(False)
 
     def begin_seek_from_slider(self):
         self.seeking = True
 
-    def seek_from_slider(self):        
+    def seek_from_slider(self):
         slider_value = self.ui.horizontalSlider.value()
         length = self.player.get_length()
-        new_time = int((slider_value / self.ui.horizontalSlider.maximum()) * length)
+        new_time = int(
+            (slider_value / self.ui.horizontalSlider.maximum()) * length)
         self.player.set_time(new_time)
 
         self.seeking = False
 
-    def play_next_song(self, event = None):
+    def play_next_song(self, event=None):
         next_song = self.song_queue.get_next_song()
 
-        if(next_song == None):
-            if(self.shuffle):
+        if next_song is None:
+            if self.shuffle:
                 # Adds the random song if nothing is next in queue and moves current index to it
                 next_song = random.choice(self.model.songs)
             else:
                 # Find current row by comparing song dicts in proxy model order
                 for proxy_row in range(self.proxy_model.rowCount()):
                     # Map the proxy row to the source model row
-                    source_index = self.proxy_model.mapToSource(self.proxy_model.index(proxy_row, 0))
+                    source_index = self.proxy_model.mapToSource(
+                        self.proxy_model.index(proxy_row, 0))
                     source_row = source_index.row()
                     song = self.model.songs[source_row]
 
                     if song == self.current_song:
-                        next_proxy_row = (proxy_row + 1) % self.proxy_model.rowCount()
-                        next_source_index = self.proxy_model.mapToSource(self.proxy_model.index(next_proxy_row, 0))
+                        next_proxy_row = (
+                            proxy_row + 1) % self.proxy_model.rowCount()
+                        next_source_index = self.proxy_model.mapToSource(
+                            self.proxy_model.index(next_proxy_row, 0))
                         next_song = self.model.songs[next_source_index.row()]
                         break
 
@@ -194,7 +210,8 @@ class MainWindow(QMainWindow):
         if self.player.is_playing():
             self.player.stop()
 
-        self.player.set_media(self.instance.media_new(self.current_song["file_path"]))
+        self.player.set_media(self.instance.media_new(
+            self.current_song["file_path"]))
         self.player.play()
 
         self.paused = False
@@ -209,7 +226,8 @@ class MainWindow(QMainWindow):
         if self.player.is_playing():
             self.player.stop()
 
-        self.player.set_media(self.instance.media_new(previous_song["file_path"]))
+        self.player.set_media(
+            self.instance.media_new(previous_song["file_path"]))
         self.player.play()
 
         self.paused = False
@@ -224,7 +242,7 @@ class MainWindow(QMainWindow):
         row = self.proxy_model.mapToSource(proxy_index).row()
         self.song_queue.add_song(self.model.songs[row])
 
-        if(len(self.song_queue.queue) == 1):
+        if (len(self.song_queue.queue) == 1):
             self.play_next_song()
 
         self.update_queue_ui()
@@ -236,7 +254,8 @@ class MainWindow(QMainWindow):
             self.ui.queue_panel.show()
 
     def update_queue_ui(self):
-        self.queue_model.setStringList([(song["title"] + " - " + song["artist"]) for song in self.song_queue.queue])
+        self.queue_model.setStringList(
+            [(song["title"] + " - " + song["artist"]) for song in self.song_queue.queue])
         index = self.queue_model.index(self.song_queue.current_index)
 
         if index.isValid():
@@ -267,10 +286,14 @@ class MainWindow(QMainWindow):
         self.worker.start()
 
     def add_song_to_model(self, song):
-        self.model.beginInsertRows(QModelIndex(), len(self.model.songs), len(self.model.songs))
+        self.model.beginInsertRows(QModelIndex(), len(
+            self.model.songs), len(self.model.songs))
         self.model.songs.append(song)
         self.model.endInsertRows()
         self.ui.label_track_count.setText(f"{len(self.model.songs)} tracks")
 
     def toggle_shuffle(self):
         self.shuffle = not self.shuffle
+
+    def show_song_finder(self):
+        self.song_finder_dialog.show()

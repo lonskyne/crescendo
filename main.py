@@ -1,5 +1,5 @@
 import sys
-from playlist import MainWindow
+from main_window import MainWindow
 from PyQt5.QtWidgets import QApplication
 
 if __name__ == "__main__":

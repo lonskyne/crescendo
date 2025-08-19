@@ -276,6 +276,23 @@
           <item>
            <layout class="QHBoxLayout" name="horizontalLayout_7">
             <item>
+             <widget class="QPushButton" name="pushButton_add_song">
+              <property name="text">
+               <string/>
+              </property>
+              <property name="icon">
+               <iconset>
+                <normaloff>icons/plus.png</normaloff>icons/plus.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>24</width>
+                <height>24</height>
+               </size>
+              </property>
+             </widget>
+            </item>
+            <item>
              <spacer name="horizontalSpacer_3">
               <property name="orientation">
                <enum>Qt::Horizontal</enum>
