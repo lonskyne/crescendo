@@ -25,7 +25,7 @@ class MainWindow(QMainWindow):
         self.seeking = False
         self.song_queue = SongQueue()
         self.shuffle = True
-        self.song_finder_dialog = SongFinderDialog()
+        self.song_finder_dialog = SongFinderDialog(self)
 
         self.instance = vlc.Instance()
         self.player = self.instance.media_player_new()

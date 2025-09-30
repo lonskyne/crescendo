@@ -83,7 +83,6 @@ class ButtonDelegate(QStyledItemDelegate):
 
 class CustomSortFilterProxyModel(QSortFilterProxyModel):
 
-
     def lessThan(self, left, right):
         column = left.column()
 

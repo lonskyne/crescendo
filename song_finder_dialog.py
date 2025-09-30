@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import QDialog
-from PyQt5.QtGui import QStandardItemModel, QStandardItem
-from PyQt5.QtCore import Qt, QObject, QThread, pyqtSignal
+from PyQt5.QtGui import QStandardItemModel, QStandardItem, QPixmap
+from PyQt5.QtCore import Qt, QObject, QThread, pyqtSignal, QByteArray
 
 from ui_add_song import Ui_SongFinderDialog
 
@@ -10,20 +10,21 @@ import yt_dlp
 
 import requests
 import eyed3
-from urllib.parse import quote_plus, quote
-from mutagen.id3 import ID3NoHeaderError
 
-
+from mutagen.id3 import ID3, APIC
+from urllib.parse import quote
 
 folder_path = "/home/lonskyne/Music/Sveeee"
 tmp_folder = "./tmp"
 
+
 class SongFinderDialog(QDialog, Ui_SongFinderDialog):
-    def __init__(self):
+    def __init__(self, parent):
         super().__init__()
         self.ui = Ui_SongFinderDialog()
         self.ui.setupUi(self)
 
+        self.parent = parent
         self.model = QStandardItemModel()
         self.ui.label_warning.setText("")
 
@@ -51,7 +52,6 @@ class SongFinderDialog(QDialog, Ui_SongFinderDialog):
             # "ytsearch" works like typing into YouTube search bar
             search_url = f"ytsearch{max_results}:{query}"
             info = ydl.extract_info(search_url, download=False)
-            print(info["entries"])
             return [(e["title"], e["url"]) for e in info["entries"]]
 
     def download_and_add_song(self):
@@ -100,15 +100,42 @@ class SongFinderDialog(QDialog, Ui_SongFinderDialog):
         track_number = self.get_next_track_number()
 
         new_file_name = str(track_number) + ". " + artist + " - " + title + ".mp3"
-        new_file_path = os.path.join(tmp_folder, new_file_name)
+        tmp_file_path = os.path.join(tmp_folder, new_file_name)
 
-        os.rename(file_path, new_file_path)
+        os.rename(file_path, tmp_file_path)
 
         # Move to music folder
-        os.rename(new_file_path, os.path.join(folder_path, new_file_name))
+        new_file_path = os.path.join(folder_path, new_file_name)
+        os.rename(tmp_file_path, new_file_path)
+
+        pixmap = QPixmap()
+        pixmap.loadFromData(QByteArray(self.extract_mp3_image(new_file_path)))
+
+        new_song = {"track": track_number,
+                    "title": title,
+                    "artist": artist,
+                    "cover": pixmap,
+                    "file_path": new_file_path}
+
+        self.parent.add_song_to_model(new_song)
+
+        self.accept()
+
+    def extract_mp3_image(self, file_path):
+        try:
+            audio = ID3(file_path)
+            for tag in audio.values():
+                if isinstance(tag, APIC):  # APIC = Attached Picture
+                    return tag.data
+        except:
+            pass
+
+        return None
+
 
     def on_download_error(self, message):
         self.ui.label_warning.setText(f"Download failed: {message}")
+        self.reject()
 
     def get_next_track_number(self) -> int:
         track_numbers = []
@@ -147,7 +174,6 @@ class SongFinderDialog(QDialog, Ui_SongFinderDialog):
             self.ui.label_warning.setText("Album art embedding failed.")
 
     def download_album_art(self, artist, album):
-        # Normalize inputs
         artist = artist.strip()
         album = album.strip()
 
@@ -185,7 +211,6 @@ class SongFinderDialog(QDialog, Ui_SongFinderDialog):
         return None
 
     def embed_album_art_mp3(self, mp3_path, image_data):
-        """Embed album art into an MP3 file using eyeD3."""
         try:
             audio = eyed3.load(mp3_path)
             if not audio:
