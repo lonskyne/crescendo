@@ -5,12 +5,14 @@ from PyQt5.QtCore import Qt, QObject, QThread, pyqtSignal, QByteArray
 from ui_add_song import Ui_SongFinderDialog
 
 import os
+import io
 import re
 import yt_dlp
 
 import requests
 import eyed3
 
+from PIL import Image, ImageChops
 from mutagen.id3 import ID3, APIC
 from urllib.parse import quote
 
@@ -32,6 +34,8 @@ class SongFinderDialog(QDialog, Ui_SongFinderDialog):
         self.ui.pushButton_download.pressed.connect(self.download_and_add_song)
 
     def search(self):
+        self.clear_ui()
+
         results = self.youtube_search(self.ui.lineEdit_search.text())
 
         for title, url in results:
@@ -82,7 +86,7 @@ class SongFinderDialog(QDialog, Ui_SongFinderDialog):
         self.worker.moveToThread(self.thread)
 
         self.thread.started.connect(self.worker.run)
-        self.worker.finished.connect(lambda file_path: self.on_download_finished(file_path, title, artist))
+        self.worker.finished.connect(lambda file_path: self.on_download_finished(file_path, title, artist, url))
         self.worker.error.connect(self.on_download_error)
 
         # Cleanup
@@ -93,9 +97,9 @@ class SongFinderDialog(QDialog, Ui_SongFinderDialog):
 
         self.thread.start()
 
-    def on_download_finished(self, file_path, title, artist):
+    def on_download_finished(self, file_path, title, artist, video_url):
         self.ui.label_warning.setText("Fetching album art...")
-        self.embed_art(file_path, title, artist)
+        self.embed_art(file_path, title, artist, video_url)
         # Rename it to correct syntax
         track_number = self.get_next_track_number()
 
@@ -109,7 +113,11 @@ class SongFinderDialog(QDialog, Ui_SongFinderDialog):
         os.rename(tmp_file_path, new_file_path)
 
         pixmap = QPixmap()
-        pixmap.loadFromData(QByteArray(self.extract_mp3_image(new_file_path)))
+
+        extracted_mp3_img = self.extract_mp3_image(new_file_path)
+
+        if extracted_mp3_img is not None:
+            pixmap.loadFromData(QByteArray(self.extract_mp3_image(new_file_path)))
 
         new_song = {"track": track_number,
                     "title": title,
@@ -118,6 +126,8 @@ class SongFinderDialog(QDialog, Ui_SongFinderDialog):
                     "file_path": new_file_path}
 
         self.parent.add_song_to_model(new_song)
+
+        self.clear_ui(True)
 
         self.accept()
 
@@ -131,7 +141,6 @@ class SongFinderDialog(QDialog, Ui_SongFinderDialog):
             pass
 
         return None
-
 
     def on_download_error(self, message):
         self.ui.label_warning.setText(f"Download failed: {message}")
@@ -153,10 +162,10 @@ class SongFinderDialog(QDialog, Ui_SongFinderDialog):
 
         return max(track_numbers) + 1
 
-    def embed_art(self, file_path, title, artist):
+    def embed_art(self, file_path, title, artist, video_url):
         ext = file_path.lower()
 
-        image_data = self.download_album_art(artist, title)
+        image_data = self.download_album_art(artist, title, video_url)
 
         if not image_data:
             print("No album art found.")
@@ -173,7 +182,7 @@ class SongFinderDialog(QDialog, Ui_SongFinderDialog):
         else:
             self.ui.label_warning.setText("Album art embedding failed.")
 
-    def download_album_art(self, artist, album):
+    def download_album_art(self, artist, album, video_url):
         artist = artist.strip()
         album = album.strip()
 
@@ -186,7 +195,6 @@ class SongFinderDialog(QDialog, Ui_SongFinderDialog):
             if results:
                 artwork_url = results[0].get("artworkUrl100")
                 if artwork_url:
-                    # Get higher resolution version
                     artwork_url = artwork_url.replace("100x100bb.jpg", "600x600bb.jpg")
                     img_data = requests.get(artwork_url, timeout=10).content
                     return img_data
@@ -195,7 +203,6 @@ class SongFinderDialog(QDialog, Ui_SongFinderDialog):
 
         # Fallback: MusicBrainz
         try:
-            # Search MusicBrainz Release Group
             mb_search = f"https://musicbrainz.org/ws/2/release-group/?query=artist:{quote(artist)}%20AND%20release:{quote(album)}&fmt=json"
             r = requests.get(mb_search, headers={"User-Agent": "AlbumArtFetcher/1.0"}, timeout=10)
             r.raise_for_status()
@@ -207,6 +214,14 @@ class SongFinderDialog(QDialog, Ui_SongFinderDialog):
                 return img_data
         except Exception as e:
             print(f"[MusicBrainz failed] {artist} - {album}: {e}")
+
+        try:
+            video_id = video_url.split('v=')[1]
+            thumbnail_url = f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
+            img_data = requests.get(thumbnail_url, timeout=10).content
+            return self.crop_to_square(img_data)
+        except Exception as e:
+            print(f"[Youtube failed] {artist} - {album} : {e}")
 
         return None
 
@@ -222,6 +237,42 @@ class SongFinderDialog(QDialog, Ui_SongFinderDialog):
             return True
         except Exception:
             return False
+
+    def clear_ui(self, clear_search=False):
+        if clear_search:
+            self.ui.lineEdit_search.setText("")
+        self.ui.lineEdit_artist.setText("")
+        self.ui.lineEdit_title.setText("")
+
+        self.ui.label_warning.setText("")
+
+        self.model.clear()
+
+    def crop_to_square(self, image_data):
+        image = Image.open(io.BytesIO(image_data))
+
+        # Remove black bars
+        bg = Image.new(image.mode, image.size, (0, 0, 0))
+        diff = ImageChops.difference(image, bg)
+        bbox = diff.getbbox()
+        if bbox:
+            image = image.crop(bbox)
+
+        width, height = image.size
+
+        min_dim = min(width, height)
+        print(f"width: {width}, height: {height}, mindim: {min_dim}")
+        left = (width - min_dim) // 2
+        top = (height - min_dim) // 2
+        right = left + min_dim
+        bottom = top + min_dim
+        print(f"{left}, {right}, {top}, {bottom}")
+
+        cropped_image = image.crop((left, top, right, bottom))
+
+        output = io.BytesIO()
+        cropped_image.save(output, format='JPEG')
+        return output.getvalue()
 
 
 class DownloadWorker(QObject):
@@ -256,4 +307,3 @@ class DownloadWorker(QObject):
             self.finished.emit(mp3_file)
         except Exception as e:
             self.error.emit(str(e))
-
