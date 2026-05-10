@@ -14,11 +14,17 @@ import eyed3
 
 from PIL import Image, ImageChops
 from mutagen.id3 import ID3, APIC
-from urllib.parse import quote
+from urllib.parse import quote, urlparse, parse_qs
 
 folder_path = "/home/lonskyne/Music/Sveeee"
 tmp_folder = "./tmp"
 
+YOUTUBE_THUMBNAIL_SIZES = [
+    "maxresdefault.jpg",
+    "sddefault.jpg",
+    "hqdefault.jpg",
+    "mqdefault.jpg",
+]
 
 class SongFinderDialog(QDialog, Ui_SongFinderDialog):
     def __init__(self, parent):
@@ -182,46 +188,122 @@ class SongFinderDialog(QDialog, Ui_SongFinderDialog):
         else:
             self.ui.label_warning.setText("Album art embedding failed.")
 
+    def is_valid_youtube_thumbnail(self, response):
+        """
+        Detect YouTube placeholder thumbnails.
+        """
+        if response.status_code != 200:
+            return False
+
+        content_type = response.headers.get("Content-Type", "")
+        if "image" not in content_type:
+            return False
+
+        # Placeholder images are usually tiny
+        if len(response.content) < 2000:
+            return False
+
+        return True
+
+
+    def extract_video_id(self, video_url):
+        parsed = urlparse(video_url)
+
+        if parsed.hostname in ["youtu.be"]:
+            return parsed.path[1:]
+
+        if parsed.hostname and "youtube.com" in parsed.hostname:
+            return parse_qs(parsed.query).get("v", [None])[0]
+
+        return None
+
+
     def download_album_art(self, artist, album, video_url):
         artist = artist.strip()
         album = album.strip()
 
         # Try iTunes Search API
         try:
-            url = f"https://itunes.apple.com/search?term={quote(artist + ' ' + album)}&media=music&entity=album&limit=1"
+            url = (
+                f"https://itunes.apple.com/search?"
+                f"term={quote(artist + ' ' + album)}"
+                f"&media=music&entity=album&limit=1"
+            )
+
             r = requests.get(url, timeout=10)
             r.raise_for_status()
+
             results = r.json().get("results", [])
+
             if results:
                 artwork_url = results[0].get("artworkUrl100")
+
                 if artwork_url:
-                    artwork_url = artwork_url.replace("100x100bb.jpg", "600x600bb.jpg")
-                    img_data = requests.get(artwork_url, timeout=10).content
-                    return img_data
+                    artwork_url = artwork_url.replace(
+                        "100x100bb.jpg",
+                        "600x600bb.jpg"
+                    )
+
+                    img = requests.get(artwork_url, timeout=10)
+
+                    if img.status_code == 200:
+                        return img.content
+
         except Exception as e:
             print(f"[iTunes failed] {artist} - {album}: {e}")
 
-        # Fallback: MusicBrainz
+        # Fallback: MusicBrainz + CoverArtArchive
         try:
-            mb_search = f"https://musicbrainz.org/ws/2/release-group/?query=artist:{quote(artist)}%20AND%20release:{quote(album)}&fmt=json"
-            r = requests.get(mb_search, headers={"User-Agent": "AlbumArtFetcher/1.0"}, timeout=10)
+            mb_search = (
+                "https://musicbrainz.org/ws/2/release-group/"
+                f"?query=artist:{quote(artist)}%20AND%20release:{quote(album)}"
+                "&fmt=json"
+            )
+
+            r = requests.get(
+                mb_search,
+                headers={"User-Agent": "AlbumArtFetcher/1.0"},
+                timeout=10
+            )
+
             r.raise_for_status()
+
             results = r.json().get("release-groups", [])
+
             if results:
                 release_group_id = results[0]["id"]
-                cover_url = f"https://coverartarchive.org/release-group/{release_group_id}/front-500.jpg"
-                img_data = requests.get(cover_url, timeout=10).content
-                return img_data
+
+                cover_url = (
+                    f"https://coverartarchive.org/"
+                    f"release-group/{release_group_id}/front-500.jpg"
+                )
+
+                img = requests.get(cover_url, timeout=10)
+
+                if img.status_code == 200:
+                    return img.content
+
         except Exception as e:
             print(f"[MusicBrainz failed] {artist} - {album}: {e}")
 
+        # Final fallback: YouTube thumbnail
         try:
-            video_id = video_url.split('v=')[1]
-            thumbnail_url = f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
-            img_data = requests.get(thumbnail_url, timeout=10).content
-            return self.crop_to_square(img_data)
+            video_id = self.extract_video_id(video_url)
+
+            if video_id:
+                for size in YOUTUBE_THUMBNAIL_SIZES:
+                    thumbnail_url = (
+                        f"https://img.youtube.com/vi/"
+                        f"{video_id}/{size}"
+                    )
+
+                    img = requests.get(thumbnail_url, timeout=10)
+
+                    if self.is_valid_youtube_thumbnail(img):
+                        return self.crop_to_square(img.content)
+
         except Exception as e:
-            print(f"[Youtube failed] {artist} - {album} : {e}")
+            print(f"[YouTube failed] {artist} - {album}: {e}")
 
         return None
 
